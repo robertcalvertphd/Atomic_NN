@@ -3,7 +3,14 @@ import random
 
 
 # from math import pow
-
+debug = True
+# todo:
+#  DANIEL:
+#   general notes:
+#       forward propagate does not throw error but has not been evaluated for accuracy.
+#       backward propagate is riddled with errors mostly surrounding lack of initialization of gradient list and
+#       inconsistencies regarding what is passed where. I have recorded comments regarding areas I see as
+#       potentially problematic.
 
 class NeuralNetwork:
 
@@ -28,11 +35,11 @@ class NeuralNetwork:
         # ASSUMPTION: The output layer has only one neuron
 
         # set initial back propagate value
-        last_layer = self.layers[len(self.layers) - 1]
-        last_output = last_layer.get_outputs()
-        last_output = np.append(last_output, 1)
+        last_layer = self.layers[len(self.layers) - 1]  # is an object
+        last_output = last_layer.get_outputs()  # float
+        last_output = np.append(last_output, 1)  # np array float, 1 todo: seems strange to append a one to output
         # self.cost = pow(last_output - desired_output, 2)
-        last_gradient = 2 * (last_output - desired_output)
+        last_gradient = 2 * (last_output - desired_output)  # np array  float, 1
         last_layer.back_propagate_last(last_gradient)
 
         # back propagate additional layers
@@ -70,13 +77,16 @@ class Layer:
             n1 = self.neurons[i]
             n1.gradient = 0
             for j in range(len(next_layer.neurons)):
-                n2 = next_layer.neurons[j]
-                g1 = n2.gradsAtInput
-                print(g1)
-                # next_gradient = self.neurons[i].calculate_gradient( next_layer.neurons[j].gradsAtInput[i] )
-                n1.update_gradient(n2.gradsAtInput[i])
-                print(self.neurons[i].gradient)
-
+                if debug:
+                    try:
+                        n2 = next_layer.neurons[j]
+                        g1 = n2.gradsAtInput
+                        print(g1)
+                        # next_gradient = self.neurons[i].calculate_gradient( next_layer.neurons[j].gradsAtInput[i] )
+                        n1.update_gradient(n2.gradsAtInput[i])
+                        print(self.neurons[i].gradient)
+                    except:
+                        print("error in back_propagate")
             if not is_input_layer:
                 self.neurons[i].calculate_gradients_at_input()
 
@@ -99,33 +109,41 @@ class Neuron:
     def __init__(self, number_of_inputs):
         self.synaptic_weights = 2 * np.random.random((1, number_of_inputs + 1)) - 1
         self.output = None
-        self.gradient = None
+        self.gradients = []
         self.gradsAtInput = None
 
     # Used as an intermediate that serves the needs of both back propagation
     # and for updating self weights
-    # Before calling update_gradient for all down-stream neurons, be sure to clear gradient.
-    def update_gradient(self, gradient_at_output):
-        x = gradient_at_output[0]
-        y = Neuron.sigmoid_derivative(self.output[0])
-        p = x * y
-        self.gradient[0] += p
+    # Before calling update_gradient for all down-stream neurons, be sure to clear gradients.
+    def update_gradient(self, gradient_at_output, output_index = 0):
+        if len(self.gradients) == 0:
+            # todo: what should gradient be initialized to?
+            self.gradients.append(gradient_at_output)
+            print("hard adding gradient to empty list of gradients.")
+        else:
+            x = gradient_at_output[output_index]
+            y = Neuron.sigmoid_derivative(x)  # todo: changed to x confirm correct change
+            p = x * y
+            self.gradients[0] += p
 
     # Used after calculate_gradient only for back propagation
     def calculate_gradients_at_input(self):
-        self.gradsAtInput = self.gradient * self.synaptic_weights
+        if debug:
+            try:
+                self.gradsAtInput = self.gradients * self.synaptic_weights
+            except:
+                print("error in calculate_gradients_at_input")
         # print(self.gradAtInput)
         return self.gradsAtInput
 
-    # Uses self.gradient from calculate_gradient
+    # Uses self.gradients from calculate_gradient
 
     def train(self):
         pass
 
     def forward_propagate(self, inputs):
         self.output = self.synaptic_weights.dot(inputs)
-        self.output = self.output[0, 0]  # numpy [1x6] * [1x6].T -> python float
-        print("error")
+        self.output = self.output[0]  # numpy [1x6] * [1x6].T -> python float
         print(self.output)
 
     @staticmethod
