@@ -1,3 +1,4 @@
+
 import numpy as np
 import random
 
@@ -11,6 +12,7 @@ debug = True
 #       backward propagate is riddled with errors mostly surrounding lack of initialization of gradient list and
 #       inconsistencies regarding what is passed where. I have recorded comments regarding areas I see as
 #       potentially problematic.
+
 
 class NeuralNetwork:
 
@@ -78,15 +80,15 @@ class Layer:
             n1.gradient = 0
             for j in range(len(next_layer.neurons)):
                 if debug:
-                    try:
-                        n2 = next_layer.neurons[j]
-                        g1 = n2.gradsAtInput
-                        print(g1)
-                        # next_gradient = self.neurons[i].calculate_gradient( next_layer.neurons[j].gradsAtInput[i] )
-                        n1.update_gradient(n2.gradsAtInput[i])
-                        print(self.neurons[i].gradient)
-                    except:
-                        print("error in back_propagate")
+
+                    n2 = next_layer.neurons[j]
+                    g1 = n2.gradsAtInput
+                    print(g1)
+                    # next_gradient = self.neurons[i].calculate_gradient( next_layer.neurons[j].gradsAtInput[i] )
+                    n1.update_gradient(n2.gradsAtInput[i])
+                    print(self.neurons[i].gradient)
+                    print("error in back_propagate")
+
             if not is_input_layer:
                 self.neurons[i].calculate_gradients_at_input()
 
@@ -115,16 +117,11 @@ class Neuron:
     # Used as an intermediate that serves the needs of both back propagation
     # and for updating self weights
     # Before calling update_gradient for all down-stream neurons, be sure to clear gradients.
-    def update_gradient(self, gradient_at_output, output_index = 0):
-        if len(self.gradients) == 0:
-            # todo: what should gradient be initialized to?
-            self.gradients.append(gradient_at_output)
-            print("hard adding gradient to empty list of gradients.")
-        else:
-            x = gradient_at_output[output_index]
-            y = Neuron.sigmoid_derivative(x)  # todo: changed to x confirm correct change
+    def update_gradient(self, gradient_at_output):
+            x = gradient_at_output
+            y = Neuron.sigmoid_derivative(x)
             p = x * y
-            self.gradients[0] += p
+            self.gradients += p
 
     # Used after calculate_gradient only for back propagation
     def calculate_gradients_at_input(self):
@@ -338,10 +335,6 @@ def evaluate_non_linear_layer(layer, rules):
     print("Non-binary rules:", rules, "correct:", str(round(correct / trials, 4) * 100) + "%")
 
 
-def run():
-    pass
-
-
 def test_case():
     layers = []
     for i in range(4):
@@ -362,6 +355,5 @@ def test_case():
     na = np.asarray(na).T
     network.forward_propagate(np.asarray(na))
     network.backward_propagate(1)
-
 
 test_case()
