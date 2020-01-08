@@ -76,7 +76,7 @@ def createPlayerDataSet():
     labels = []
 
     positive = 0
-    for i in range(100):
+    for i in range(10000):
         p = ExamplePlayer()
         samples.append(p.week1)
         labels.append(p.week2Score)
@@ -86,7 +86,7 @@ def createPlayerDataSet():
 
 
 model = Sequential([
-    Dense(2, input_shape=(6,), activation='relu'),
+    Dense(6, input_shape=(6,), activation='relu'),
     Dense(4, activation="relu"),
     Dense(2, activation="softmax")
 ])
@@ -97,5 +97,5 @@ d = createPlayerDataSet()
 samples = [d[0]]
 labels = d[1]
 
-model.fit(samples, labels, batch_size=10, epochs=500, shuffle=True, verbose=2)
+model.fit(samples, labels, batch_size=50, epochs=25, shuffle=True, verbose=2)
 
