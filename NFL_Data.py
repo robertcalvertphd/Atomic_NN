@@ -88,22 +88,23 @@ class WeekStats(CSV_Object):
 def myRound(n):
     return int(n * 100) / 100
 
+allQBWeeks = []
+allQBs = []
 def populateQBsForYear(year):
+    global allQBs
     qbs = []
     qbNames = []
     for i in range(16):
-        try:
-            games = nflgame.games(2009 + year, week=i + 1)
-        except:
-            print("error" + str(year) + " " + str(i))
+        games = nflgame.games(2009 + year, week=i + 1)
         players = nflgame.combine_game_stats(games)
 
         # get list of all qbs who played this week
         qbIndex = 0
         for p in players.passing():
-            if p.passing_att > 5:
+            if p.passing_att > 15:
                 weekStats = WeekStats(p, i + 1, 2009 + year, p.fumbles_lost, p.passing_int, p.passing_yds,
                                       p.rushing_yds, p.receiving_yds, p.passing_tds, p.rushing_tds, p.receiving_tds)
+                allQBWeeks.append(weekStats)
                 if p.name in qbNames:
                     location = qbNames.index(p.name)
                     qbs[location].weekStats.append(weekStats)
@@ -112,10 +113,11 @@ def populateQBsForYear(year):
                     newQb = Player(p.name, qbIndex)
                     newQb.weekStats.append(weekStats)
                     qbs.append(newQb)
-                    #print(p.name)
                     qbIndex += 1
+
     for qb in qbs:
-        qb.cleanWeeks(2010)
+        allQBs.append(qb)
+        qb.cleanWeeks(2009+year)
         m = qb.name + ": "
         sumOfScores = 0
         for week in qb.weekStats:
@@ -126,32 +128,36 @@ def populateQBsForYear(year):
             sumOfScores += score
             m += str(score) + " , "
         m += str(myRound(sumOfScores))
-        #print(m)
 
     return qbs
 
-players = []
-weeks = []
-qbs = populateQBsForYear(1)
 
-def createDataSet():
+def createDataSet(playerData):
     data = []
     labels = []
-    for qb in qbs:
+    names = []
+    for player in playerData:
         for week in range(14):
-            a = qb.weekStats[week]
+            a = player.weekStats[week]
             if not a == 0:
-                data.append(a.getWeekAsArray())
+                d = a.getWeekAsArray()
 
-            l = qb.weekStats[week+1]
-            if not l == 0:
-                labels.append(l.getGreaterThanCutoff(20))
+            l = player.weekStats[week+1]
+            l2 = player.weekStats[week+2]
+            if not l == 0 and not l2 == 0:
+                w1 = l.getGreaterThanCutoff(21)
+                w2 = l2.getGreaterThanCutoff(21)
+                data.append(d)
+                labels.append(max(w1,w2))
+                names.append(player.name)
+    return data, labels, names
 
+players = []
+weeks = []
 
+qbs = populateQBsForYear(1)
+q2 = populateQBsForYear(2)
 
-    return data, labels
-
-createDataSet()
 
 
 
@@ -161,11 +167,71 @@ model = Sequential([
     Dense(2, activation="softmax")
 ])
 
-model.compile(Adam(lr=.01), loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+model.compile(Adam(lr=.001), loss='sparse_categorical_crossentropy', metrics=['accuracy'])
 
-d = createDataSet()
-samples = [d[0]]
-labels = d[1]
+def calibrateToReasonableYesNo():
+    while 1:
+        d1 = createDataSet(allQBs)
+        samples = [d1[0]]
+        labels = d1[1]
 
-model.fit(samples, labels, batch_size=50, epochs=25, shuffle=True, verbose=2)
+        d2 = createDataSet(q2)
+        samples2 = [d2[0]]
+        labels2 = d2[1]
 
+        model.fit(samples, labels, batch_size=50, epochs=10, shuffle=True, validation_split = 0.1, verbose=2)
+
+        #score = model.evaluate(samples2, labels2, verbose=2)
+        #print("loss:",str(score[0]),"accuracy",str(score[1]))
+
+        predictions = model.predict_classes(samples2)
+        p = sum(predictions/len(predictions))
+        if p <.3 and p > .02:
+            score = model.evaluate(samples2, labels2, verbose=2)
+            print("loss:",str(score[0]),"accuracy",str(score[1]))
+            print(predictions)
+            print(sum(predictions))
+            return predictions, d2[2]
+
+tagged_names = []
+def runInstance():
+    global tagged_names
+    p = calibrateToReasonableYesNo()
+    predictions = p[0]
+    matchedName = p[1]
+
+    i = 0
+    names = []
+    for prediction in predictions:
+        if prediction == 1:
+            print(i, matchedName[i])
+            names.append(matchedName[i])
+        i += 1
+    for n in names:
+        tagged_names.append(n)
+
+def sortSecond(val):
+    return val[1]
+
+def getQBPicks():
+    ret = []
+    for i in range(20):
+        runInstance()
+
+    tagged_names.sort()
+    handled = []
+    for name in tagged_names:
+        if not handled.__contains__(name):
+            handled.append(name)
+
+    for name in handled:
+        #print(name, str(tagged_names.count(name)))
+        ret.append([name, tagged_names.count(name)])
+
+    ret.sort(key=sortSecond)
+    length = len(ret)
+    for i in range(5):
+
+        print(ret[length-(i+1)])
+
+getQBPicks()
