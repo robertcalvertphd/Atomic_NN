@@ -24,6 +24,12 @@ class Player():
                 ret[w.week - 1] = w
         self.weekStats = ret
 
+    def getYearScore(self):
+        score = 0
+        for w in self.weekStats:
+            if not w == 0:
+                score += w.getPlayerScore()
+        return score
 class WeekStats(CSV_Object):
     PLAYER_NAME = 0
     FUMBLES = 1
@@ -51,7 +57,7 @@ class WeekStats(CSV_Object):
         self.values = (playerName, week, year, fumbles, ints, passYds, rushYds, recYds, passTD, rushTD, recTD, goodWeek)
         self.columnNames = ("playerName, week, year, fumbles, ints, passYds, rushYds, recYds, passTD, rushTD, recTD, goodWeek")
         weeks.append(self)
-    # this is incomplete but will serve my purposes if I am interested later I can add long rushes/recepts/2pts etc
+    # this is incomplete but will serve my purposes if I am interested later I can add long rushes/receptions/2pts etc
 
     def getPlayerScore(self):
         ret = (self.fumbles + self.interceptions) * -2 + self.passYds / 25 + self.passTD * 4 + self.rushYds / 10 + self.recYds / 10 + self.recTD * 6 + self.rushTD * 6
@@ -179,7 +185,7 @@ def calibrateToReasonableYesNo():
         samples2 = [d2[0]]
         labels2 = d2[1]
 
-        model.fit(samples, labels, batch_size=50, epochs=10, shuffle=True, validation_split = 0.1, verbose=2)
+        model.fit(samples, labels, batch_size=50, epochs=10, shuffle=True, verbose=2)
 
         #score = model.evaluate(samples2, labels2, verbose=2)
         #print("loss:",str(score[0]),"accuracy",str(score[1]))
@@ -230,8 +236,17 @@ def getQBPicks():
 
     ret.sort(key=sortSecond)
     length = len(ret)
-    for i in range(5):
+    for i in range(10):
 
         print(ret[length-(i+1)])
 
+def getYearScoresForGroup(group):
+    ret = []
+    for player in group:
+        ret.append([player.name, player.getYearScore()])
+    ret.sort(key=sortSecond,reverse = True)
+    return ret
 getQBPicks()
+yearScores = getYearScoresForGroup(q2)
+for p in yearScores:
+    print (p)
