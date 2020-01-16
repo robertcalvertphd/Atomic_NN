@@ -2,7 +2,7 @@ import nflgame
 from keras.models import Sequential
 from keras.layers import Dense
 from keras.optimizers import Adam
-import numpy as np
+# import numpy as np
 
 
 class Player:
@@ -129,12 +129,20 @@ def createDataSet(playerData, cutoff):
                 d: WeekStats = a.getWeekAsArray()
 
                 l1 = player.weekStats[week + 1]
+
+                '''
                 l2 = player.weekStats[week + 2]
                 if not l1 == 0 and not l2 == 0:
                     w1 = l1.getGreaterThanCutoff(cutoff)
                     w2 = l2.getGreaterThanCutoff(cutoff)
+                
                     data.append(d)
                     labels.append(max(w1, w2))
+                '''
+                if not l1 == 0:
+                    w1 = l1.getGreaterThanCutoff(cutoff)
+                    data.append(d)
+                    labels.append(w1)
                     names.append(player.name)
 
     return data, labels, names
@@ -152,26 +160,20 @@ def calibrate(training, test, model):
         samples2 = [d2[0]]
         labels2 = d2[1]
 
-        np.random.seed()
-        model.fit(samples, labels, batch_size=50, epochs=10, shuffle=True, verbose=2)
+        model.fit(samples, labels, batch_size=50, epochs=10, shuffle=True, verbose=0)
 
         predictions = model.predict_classes(samples2)
         p = sum(predictions / len(predictions))
-        #print(p)
         if .6 > p > .02:
-            # score = model.evaluate(samples2, labels2, verbose=0)
-            # print("loss:", str(score[0]), "accuracy", str(score[1]))
-            # print(predictions)
-            # print(sum(predictions))
+
             return predictions, d2[2]
 
         if tries > 20:
-            # print("values outside of range")
             print("failed calibration")
-            #model = createModel()
             return False
 
         evaluateModel(model, samples2, labels2)
+
 
 def create_score_for_each_player(predictions, all_names):
     names = []
@@ -202,19 +204,30 @@ def createModel():
     return model
 
 
-def apply_model_to_year_for_position(model, position_data):
+def getRankedList(players_of_a_certain_position):
+    name_score_list = []
+
+    for player in players_of_a_certain_position:
+        name = player.name
+        score = player.getYearScore()
+        name_score_list.append((name, score))
+
+    name_score_list.sort(key=sortSecond, reverse=True)
+
+    return name_score_list
+
+
+def apply_model_to_year_for_position(model, position_data, players):
     trainingYear = []
     testYear = position_data[6]
     position_data.remove(position_data[6])
 
-    ret = []
     for player_list in position_data:
         for playerStats in player_list:
             trainingYear.append(playerStats)
 
     ret = []
     for i in range(10):
-
         results = calibrate(trainingYear, testYear, model)
         if not results:
             print("invalid")
@@ -225,7 +238,8 @@ def apply_model_to_year_for_position(model, position_data):
             yearResults = getTotalFromPairedNamesAndScores(names, scores)
             for r in yearResults:
                 ret.append(r)
-    return ret
+
+    return ret, getRankedList(players)
 
 
 def getTotalFromPairedNamesAndScores(names, scores):
@@ -275,6 +289,12 @@ def evaluateModel(model, samples, labels):
     print("loss:", str(score[0]), "accuracy", str(score[1]))
 
 
+def getPlayer(name, allPlayers):
+    for player in allPlayers:
+        if player == name:
+            return player
+
+
 def run():
     # yearDataSets = []
     qbModel = createModel()
@@ -285,21 +305,39 @@ def run():
     wrsYearsDataSet = []
     rbsYearsDataSet = []
 
-    for year in range(7):
-        #print("new year")
+    qbsFinalYear = []
+    rbsFinalYear = []
+    wrsFinalYear = []
+
+    FINAL_YEAR = 6
+
+    for year in range(FINAL_YEAR+1):
         playerData = populatePlayersForYear(year)
 
         qbs = playerData[1]
         rbs = playerData[2]
         wrs = playerData[3]
 
-        qbsYearsDataSet.append(createDataSet(qbs, 20))
-        rbsYearsDataSet.append(createDataSet(rbs, 13))
-        wrsYearsDataSet.append(createDataSet(wrs, 10))
+        qbsYearsDataSet.append(createDataSet(qbs, 16))
+        rbsYearsDataSet.append(createDataSet(rbs, 11))
+        wrsYearsDataSet.append(createDataSet(wrs, 8))
 
-    qbResults = apply_model_to_year_for_position(qbModel, qbsYearsDataSet)
-    rbResults = apply_model_to_year_for_position(rbModel, rbsYearsDataSet)
-    wrResults = apply_model_to_year_for_position(wrModel, wrsYearsDataSet)
+        if year == FINAL_YEAR:
+            qbsFinalYear = qbs
+            rbsFinalYear = rbs
+            wrsFinalYear = wrs
+
+    qbResults = apply_model_to_year_for_position(qbModel, qbsYearsDataSet, qbsFinalYear)
+    rbResults = apply_model_to_year_for_position(rbModel, rbsYearsDataSet, rbsFinalYear)
+    wrResults = apply_model_to_year_for_position(wrModel, wrsYearsDataSet, wrsFinalYear)
+
+    qbRanks = qbResults[1]
+    rbRanks = rbResults[1]
+    wrRanks = wrResults[1]
+
+    qbResults = qbResults[0]
+    rbResults = rbResults[0]
+    wrResults = wrResults[0]
 
     if not qbResults or not rbResults or not wrResults:
         print("rerunning")
@@ -317,14 +355,22 @@ def run():
     wrResults.sort(key=sortSecond, reverse=True)
     rbResults.sort(key=sortSecond, reverse=True)
 
-    print(qbResults[:5])
-    print(rbResults[:5])
-    print(wrResults[:5])
+    handleResultsByPosition(qbResults[:5], qbRanks)
+    handleResultsByPosition(wrResults[:5], wrRanks)
+    handleResultsByPosition(rbResults[:5], rbRanks)
 
     return qbResults, rbResults, wrResults
 
-
-
+def handleResultsByPosition(picks, trueValues):
+    print("top 5 for this position")
+    trueValues.sort(key=sortSecond, reverse=True)
+    for player in picks:
+        count = 0
+        for place in trueValues:
+            count += 1
+            if player[0] == place[0]:
+                print(player[0], "rank: ",count)
+    print("________")
 
 
 run()
