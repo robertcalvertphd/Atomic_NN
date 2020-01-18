@@ -240,9 +240,3 @@ def evaluateModelWithTestData(qbs, wrs, rbs):
 
     return qbValues[:5], rbValues[:5], wrValues[:5]
 
-r = createPlayerDataSets()
-for i in r:
-    print("_____")
-    for d in i:
-        print(d)
-    print("_____")

@@ -3,7 +3,7 @@ from keras.models import Sequential
 from keras.layers import Dense
 from keras.optimizers import Adam
 from CSV_HELPER import CSV_Object, createCSV
-
+from NFL_Binary_Logistic_regression import createPlayerDataSets as createRegressionData
 
 # import numpy as np
 
@@ -405,10 +405,14 @@ def runNN():
     rbResults.sort(key=sortSecond, reverse=True)
 
     handleResultsByPosition(qbResults[:5], qbRanks)
-    handleResultsByPosition(wrResults[:5], wrRanks)
     handleResultsByPosition(rbResults[:5], rbRanks)
+    handleResultsByPosition(wrResults[:5], wrRanks)
 
 #    runLogisticRegression(qbs, rbs, wrs)
+    regressionResults = createRegressionData()
+    handleResultsByPosition(regressionResults[0], qbRanks)
+    handleResultsByPosition(regressionResults[1], rbRanks)
+    handleResultsByPosition(regressionResults[2], wrRanks)
 
 
 def handleResultsByPosition(picks, trueValues):
