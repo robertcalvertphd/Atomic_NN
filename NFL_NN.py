@@ -2,7 +2,26 @@ import nflgame
 from keras.models import Sequential
 from keras.layers import Dense
 from keras.optimizers import Adam
+from CSV_HELPER import CSV_Object, createCSV
+
+
 # import numpy as np
+
+
+class PlayerCSV(CSV_Object):
+    def __init__(self, name, d):
+        name = name
+        fumbles = d[0]
+        interceptions = d[1]
+        passYds = d[2]
+        rushYds = d[3]
+        recYds = d[4]
+        passTD = d[5]
+        rushTD = d[6]
+        recTD = d[7]
+
+        self.values = [name, fumbles, interceptions, passYds, rushYds, recYds, passTD, rushTD, recTD]
+        self.columnNames = "name, fumbles, interceptions, passYds, rushYds, recYds, passTD, rushTD, recTD"
 
 
 class Player:
@@ -31,7 +50,7 @@ class Player:
         return score
 
 
-class WeekStats:
+class WeekStats(CSV_Object):
     PLAYER_NAME = 0
     FUMBLES = 1
     INTS = 2
@@ -56,6 +75,10 @@ class WeekStats:
         self.passTD = passTD
         self.rushTD = rushTD
         self.recTD = recTD
+        self.goodNextWeek = 0
+
+        self.values = [playerName, fumbles, ints, passYds, rushYds, recYds, passTD, rushTD, recTD, self.goodNextWeek]
+        self.columnNames = "name, fumbles, ints, passYds, rushYds, recYds, passTD, rushTD, recTD, goodNextWeek"
 
     def getPlayerScore(self):
         ret = (self.fumbles + self.interceptions) * -2 + self.passYds / 25 + self.passTD * 4 + self.rushYds / 10 + \
@@ -71,6 +94,11 @@ class WeekStats:
     def getWeekAsArray(self):
         return [self.fumbles, self.interceptions, self.passYds, self.rushYds, self.recYds, self.passTD, self.rushTD,
                 self.recTD]
+
+    def set_good_next_week(self, week, cutoff):
+        if not week == 0:
+            self.goodNextWeek = week.getGreaterThanCutoff(cutoff)
+        return self.goodNextWeek
 
 
 def populatePlayersForYear(year):
@@ -123,13 +151,15 @@ def createDataSet(playerData, cutoff):
     names = []
     # print("create data set call")
     for player in playerData:
-        for week in range(14):
+        for week in range(15):
             a = player.weekStats[week]
             if not a == 0:
-                d: WeekStats = a.getWeekAsArray()
 
                 l1 = player.weekStats[week + 1]
-
+                player.weekStats[week].set_good_next_week(l1, cutoff)
+                goodNextWeek = a.set_good_next_week(l1, cutoff)
+                d: WeekStats = player.weekStats[week].getWeekAsArray()
+                d[7] = goodNextWeek
                 '''
                 l2 = player.weekStats[week + 2]
                 if not l1 == 0 and not l2 == 0:
@@ -165,7 +195,6 @@ def calibrate(training, test, model):
         predictions = model.predict_classes(samples2)
         p = sum(predictions / len(predictions))
         if .6 > p > .02:
-
             return predictions, d2[2]
 
         if tries > 20:
@@ -295,7 +324,27 @@ def getPlayer(name, allPlayers):
             return player
 
 
-def run():
+def createCSVs(qbs, wrs, rbs):
+    weekData = []
+    for qb in qbs:
+        for week in qb.weekStats:
+            if not week == 0:
+                weekData.append(week)
+    createCSV("qbs", weekData, 0)
+
+
+def runLogisticRegression(qbs, wrs, rbs):
+    createCSVs(qbs, wrs, rbs)
+    # get data: passed as a parameter
+
+    # create model
+
+    # apply model to test data
+
+    # print results
+
+
+def runNN():
     # yearDataSets = []
     qbModel = createModel()
     rbModel = createModel()
@@ -311,7 +360,7 @@ def run():
 
     FINAL_YEAR = 6
 
-    for year in range(FINAL_YEAR+1):
+    for year in range(FINAL_YEAR + 1):
         playerData = populatePlayersForYear(year)
 
         qbs = playerData[1]
@@ -319,7 +368,7 @@ def run():
         wrs = playerData[3]
 
         qbsYearsDataSet.append(createDataSet(qbs, 16))
-        rbsYearsDataSet.append(createDataSet(rbs, 11))
+        rbsYearsDataSet.append(createDataSet(rbs, 10))
         wrsYearsDataSet.append(createDataSet(wrs, 8))
 
         if year == FINAL_YEAR:
@@ -341,7 +390,7 @@ def run():
 
     if not qbResults or not rbResults or not wrResults:
         print("rerunning")
-        run()
+        runNN()
 
     qbResults = separateTuples(qbResults)
     rbResults = separateTuples(rbResults)
@@ -359,7 +408,8 @@ def run():
     handleResultsByPosition(wrResults[:5], wrRanks)
     handleResultsByPosition(rbResults[:5], rbRanks)
 
-    return qbResults, rbResults, wrResults
+    runLogisticRegression(qbs, rbs, wrs)
+
 
 def handleResultsByPosition(picks, trueValues):
     print("top 5 for this position")
@@ -369,8 +419,10 @@ def handleResultsByPosition(picks, trueValues):
         for place in trueValues:
             count += 1
             if player[0] == place[0]:
-                print(player[0], "rank: ",count)
+                print(player[0], "rank: ", count)
     print("________")
 
 
-run()
+n = runNN()
+
+# ______________end of neural network code__________________________

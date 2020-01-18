@@ -1,11 +1,6 @@
 import nflgame
 from CSV_HELPER import CSV_Object, createCSV
 
-# from NFL_NN import PlayerCSV
-# from NFL_NN import createDataSet
-# from NFL_NN import populatePlayersForYear
-# from NFL_NN import sort_players_into_position
-
 
 class Player:
     def __init__(self, name, _id, position):
@@ -63,8 +58,7 @@ class WeekStats(CSV_Object):
     RUSH_TD = 7
     REC_TD = 8
 
-    def __init__(self, playerName, position, week, year, fumbles, ints, passYds, rushYds, recYds, passTD, rushTD,
-                 recTD):
+    def __init__(self, playerName, position, week, year, fumbles, ints, passYds, rushYds, recYds, passTD, rushTD, recTD):
         self.playerName = playerName
         self.position = position
         self.week = week
@@ -83,7 +77,6 @@ class WeekStats(CSV_Object):
 
     def updateCSVvalues(self):
         self.values = [self.playerName, self.fumbles, self.interceptions, self.passYds, self.rushYds, self.recYds, self.passTD, self.rushTD, self.recTD, self.goodNextWeek]
-
 
     def getPlayerScore(self):
         ret = (self.fumbles + self.interceptions) * -2 + self.passYds / 25 + self.passTD * 4 + self.rushYds / 10 + \
@@ -157,13 +150,21 @@ def createPlayerDataSets():
 
         createCSVs(qbs, wrs, rbs)
 
-def createCSVs(qbs, wrs, rbs):
+
+def createPositionCSV(positionData, fileName):
     weekData = []
-    for qb in qbs:
-        for week in qb.weekStats:
+    for p in positionData:
+        for week in p.weekStats:
             if not week == 0:
                 weekData.append(week)
-    createCSV("qbs", weekData, 0)
+
+    createCSV(fileName, weekData, 0)
+
+
+def createCSVs(qbs, wrs, rbs):
+    createPositionCSV(qbs, "qbs")
+    createPositionCSV(wrs, "wrs")
+    createPositionCSV(rbs, "rbs")
 
 
 createPlayerDataSets()
