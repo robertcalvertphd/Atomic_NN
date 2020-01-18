@@ -1,5 +1,6 @@
 import nflgame
 from CSV_HELPER import CSV_Object, createCSV
+import math
 
 
 class Player:
@@ -32,7 +33,7 @@ class Player:
         cutoff = 0
         if self.position == 'QB':
             cutoff = 18
-        if self. position == "RB":
+        if self.position == "RB":
             cutoff = 10
         if self.position == "WR":
             cutoff = 10
@@ -41,7 +42,7 @@ class Player:
             for week in self.weekStats:
                 index += 1
                 if index < 15:
-                    nextWeek = self.weekStats[index+1]
+                    nextWeek = self.weekStats[index + 1]
                     if not week == 0 and not nextWeek == 0:
                         nextWeekisGood = nextWeek.getGreaterThanCutoff(cutoff)
                         week.goodNextWeek = nextWeekisGood
@@ -59,8 +60,8 @@ class WeekStats(CSV_Object):
     RUSH_TD = 7
     REC_TD = 8
 
-    def __init__(self, playerName, position, week, year, fumbles, interceptions, passYds, rushYds, recYds, passTD, rushTD, recTD):
-
+    def __init__(self, playerName, position, week, year, fumbles, interceptions, passYds, rushYds, recYds, passTD,
+                 rushTD, recTD):
         self.playerName = playerName
         self.position = position
         self.week = week
@@ -78,8 +79,8 @@ class WeekStats(CSV_Object):
         self.columnNames = "name, fumbles, ints, passYds, rushYds, recYds, passTD, rushTD, recTD, goodNextWeek"
 
     def updateCSVvalues(self):
-        self.values = [self.playerName, self.fumbles, self.interceptions, self.passYds, self.rushYds, self.recYds, self.passTD, self.rushTD, self.recTD, self.goodNextWeek]
-
+        self.values = [self.playerName, self.fumbles, self.interceptions, self.passYds, self.rushYds, self.recYds,
+                       self.passTD, self.rushTD, self.recTD, self.goodNextWeek]
 
     def getPlayerScore(self):
         ret = (self.fumbles + self.interceptions) * -2 + self.passYds / 25 + self.passTD * 4 + self.rushYds / 10 + \
@@ -146,6 +147,7 @@ def createPlayerDataSets():
     allQbs = []
     allWrs = []
     allRbs = []
+    ret = []
 
     for year in range(7):
         playerData = populatePlayersForYear(year)
@@ -162,8 +164,9 @@ def createPlayerDataSets():
 
         if year == 6:
             createCSVs(qbs, wrs, rbs, year)
+            ret = evaluateModelWithTestData(qbs, wrs, rbs)
     createCSVs(allQbs, allWrs, allRbs, "_1_6")
-
+    return ret
 
 def createPositionCSV(positionData, fileName, year):
     weekData = []
@@ -181,5 +184,65 @@ def createCSVs(qbs, wrs, rbs, year):
     createPositionCSV(rbs, "rbs", year)
 
 
-createPlayerDataSets()
+def binaryLogistic(week, arrayOfCoefficients):
+    ret = arrayOfCoefficients[0]
 
+    weekArray = week.getWeekAsArray()
+
+    for i in range(len(weekArray) - 1):
+        ret += weekArray[i] * arrayOfCoefficients[i + 1]
+    return ret
+
+
+def sortSecond(val):
+    return val[1]
+
+
+def logit2prob(logit):
+    odds = math.exp(logit)
+    prob = odds / (1 + odds)
+    return prob
+
+
+def evaluatePosition(players, coefficients, cutoff):
+    ret = []
+    for p in players:
+        score = 0
+        name = p.name
+        for week in p.weekStats:
+            if not week == 0:
+                if logit2prob(binaryLogistic(week, coefficients)) > cutoff:
+                    score += 1
+        ret.append((name, score))
+
+    ret.sort(key=sortSecond, reverse=True)
+    return ret
+
+
+def evaluateModelWithTestData(qbs, wrs, rbs):
+
+    qbCutoff = .3
+    rbCutoff = .3
+    wrCutoff = .3
+
+    #                 intercept, fumbles, ints, passYd, rushYd, recYd, passTD, rushTD, recTD
+    qbCoefficients = [-1.84, -.248, -.166, .0033947, .0062, 0, .0948, .111, 0]
+    rbCoefficients = [-1.85, 0, 0, 0, .0137936, .0102325, 0, 0, 0]
+    wrCoefficients = [-2.2613, 0, 0, 0, .02128, .0112349, 0, -.998, .1228]
+
+    qbValues = evaluatePosition(qbs, qbCoefficients, qbCutoff)
+    wrValues = evaluatePosition(wrs, wrCoefficients, wrCutoff)
+    rbValues = evaluatePosition(rbs, rbCoefficients, rbCutoff
+                                )
+    qbValues.sort(key=sortSecond, reverse=True)
+    wrValues.sort(key=sortSecond, reverse=True)
+    rbValues.sort(key=sortSecond, reverse=True)
+
+    return qbValues[:5], rbValues[:5], wrValues[:5]
+
+r = createPlayerDataSets()
+for i in r:
+    print("_____")
+    for d in i:
+        print(d)
+    print("_____")
