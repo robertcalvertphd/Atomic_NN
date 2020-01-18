@@ -59,13 +59,14 @@ class WeekStats(CSV_Object):
     RUSH_TD = 7
     REC_TD = 8
 
-    def __init__(self, playerName, position, week, year, fumbles, ints, passYds, rushYds, recYds, passTD, rushTD, recTD):
+    def __init__(self, playerName, position, week, year, fumbles, interceptions, passYds, rushYds, recYds, passTD, rushTD, recTD):
+
         self.playerName = playerName
         self.position = position
         self.week = week
         self.year = year
         self.fumbles = fumbles
-        self.interceptions = ints
+        self.interceptions = interceptions
         self.passYds = passYds
         self.rushYds = rushYds
         self.recYds = recYds
@@ -79,6 +80,7 @@ class WeekStats(CSV_Object):
     def updateCSVvalues(self):
         self.values = [self.playerName, self.fumbles, self.interceptions, self.passYds, self.rushYds, self.recYds, self.passTD, self.rushTD, self.recTD, self.goodNextWeek]
 
+
     def getPlayerScore(self):
         ret = (self.fumbles + self.interceptions) * -2 + self.passYds / 25 + self.passTD * 4 + self.rushYds / 10 + \
               self.recYds / 10 + self.recTD * 6 + self.rushTD * 6
@@ -91,8 +93,6 @@ class WeekStats(CSV_Object):
         return 0
 
     def getWeekAsArray(self):
-        if self.goodNextWeek:
-            print("hmm")
         return [self.fumbles, self.interceptions, self.passYds, self.rushYds, self.recYds, self.passTD, self.rushTD,
                 self.recTD, self.goodNextWeek]
 
@@ -126,7 +126,7 @@ def populatePlayersForYear(year):
         playerIndex = 0
         for p in players:
             if p.passing_att > 15 or p.rushing_att > 5 or p.receiving_yds > 10:
-                weekStats = WeekStats(p, p.guess_position, i + 1, 2009 + year, p.fumbles_lost, p.passing_int,
+                weekStats = WeekStats(p, p.guess_position, i + 1, 2009 + year, p.fumbles_lost, p.passing_ints,
                                       p.passing_yds,
                                       p.rushing_yds, p.receiving_yds, p.passing_tds, p.rushing_tds, p.receiving_tds)
                 if p.name in playerNames:
