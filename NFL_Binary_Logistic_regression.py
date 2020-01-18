@@ -18,6 +18,7 @@ class Player:
         for w in self.weekStats:
             if w.year == year:
                 ret[w.week - 1] = w
+
         self.weekStats = ret
 
     def getYearScore(self):
@@ -142,29 +143,43 @@ def populatePlayersForYear(year):
 
 
 def createPlayerDataSets():
+    allQbs = []
+    allWrs = []
+    allRbs = []
+
     for year in range(7):
         playerData = populatePlayersForYear(year)
         qbs = playerData[1]
         rbs = playerData[2]
         wrs = playerData[3]
 
-        createCSVs(qbs, wrs, rbs)
+        for q in qbs:
+            allQbs.append(q)
+        for r in rbs:
+            allRbs.append(r)
+        for w in wrs:
+            allWrs.append(w)
+
+        if year == 6:
+            createCSVs(qbs, wrs, rbs, year)
+    createCSVs(allQbs, allWrs, allRbs, "_1_6")
 
 
-def createPositionCSV(positionData, fileName):
+def createPositionCSV(positionData, fileName, year):
     weekData = []
     for p in positionData:
         for week in p.weekStats:
             if not week == 0:
                 weekData.append(week)
 
-    createCSV(fileName, weekData, 0)
+    createCSV(fileName, weekData, year)
 
 
-def createCSVs(qbs, wrs, rbs):
-    createPositionCSV(qbs, "qbs")
-    createPositionCSV(wrs, "wrs")
-    createPositionCSV(rbs, "rbs")
+def createCSVs(qbs, wrs, rbs, year):
+    createPositionCSV(qbs, "qbs", year)
+    createPositionCSV(wrs, "wrs", year)
+    createPositionCSV(rbs, "rbs", year)
 
 
 createPlayerDataSets()
+

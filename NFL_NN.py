@@ -408,7 +408,7 @@ def runNN():
     handleResultsByPosition(wrResults[:5], wrRanks)
     handleResultsByPosition(rbResults[:5], rbRanks)
 
-    runLogisticRegression(qbs, rbs, wrs)
+#    runLogisticRegression(qbs, rbs, wrs)
 
 
 def handleResultsByPosition(picks, trueValues):
