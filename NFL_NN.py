@@ -105,16 +105,18 @@ def populatePlayersForYear(year):
     playersData = []
     playerNames = []
 
-    for i in range(16):
-        games = nflgame.games(2009 + year, week=i + 1)
+    for w in range(16):
+        games = nflgame.games(2009 + year, week=w + 1)
         players = nflgame.combine_game_stats(games)
 
         playerIndex = 0
         for p in players:
-            if p.passing_att > 15 or p.rushing_att > 5 or p.receiving_yds > 10:
-                weekStats = WeekStats(p, p.guess_position, i + 1, 2009 + year, p.fumbles_lost, p.passing_int,
-                                      p.passing_yds,
-                                      p.rushing_yds, p.receiving_yds, p.passing_tds, p.rushing_tds, p.receiving_tds)
+            if p.passing_att > 10 or p.rushing_att > 5 or p.receiving_yds > 10:
+                weekStats = WeekStats(p, p.guess_position, w + 1, 2009 + year,
+                                      p.fumbles_lost, p.passing_int, p.passing_yds,
+                                      p.rushing_yds, p.receiving_yds, p.passing_tds,
+                                      p.rushing_tds, p.receiving_tds)
+
                 if p.name in playerNames:
                     location = playerNames.index(p.name)
                     playersData[location].weekStats.append(weekStats)
@@ -149,36 +151,23 @@ def createDataSet(playerData, cutoff):
     data = []
     labels = []
     names = []
-    # print("create data set call")
+
     for player in playerData:
         for week in range(15):
-            a = player.weekStats[week]
-            if not a == 0:
-
-                l1 = player.weekStats[week + 1]
-                player.weekStats[week].set_good_next_week(l1, cutoff)
-                goodNextWeek = a.set_good_next_week(l1, cutoff)
+            thisWeek = player.weekStats[week]
+            nextWeek = player.weekStats[week + 1]
+            if not thisWeek == 0 and not nextWeek == 0:
+                # both this week and next week are valid
+                goodNextWeek = nextWeek.getGreaterThanCutoff(cutoff)
                 d: WeekStats = player.weekStats[week].getWeekAsArray()
                 d[7] = goodNextWeek
-                '''
-                l2 = player.weekStats[week + 2]
-                if not l1 == 0 and not l2 == 0:
-                    w1 = l1.getGreaterThanCutoff(cutoff)
-                    w2 = l2.getGreaterThanCutoff(cutoff)
-                
-                    data.append(d)
-                    labels.append(max(w1, w2))
-                '''
-                if not l1 == 0:
-                    w1 = l1.getGreaterThanCutoff(cutoff)
-                    data.append(d)
-                    labels.append(w1)
-                    names.append(player.name)
-
+                data.append(d)
+                labels.append(goodNextWeek)
+                names.append(player.name)
     return data, labels, names
 
 
-def calibrate(training, test, model,testYear):
+def calibrate(training, test, model, testYear):
     tries = 0
     while 1:
         tries += 1
@@ -341,7 +330,6 @@ def runNN(testYear):
     rbsFinalYear = []
     wrsFinalYear = []
 
-
     for year in range(7):
         playerData = populatePlayersForYear(year)
 
@@ -414,15 +402,12 @@ def handleResultsByPosition(picks, trueValues, testYear, NN = True):
     print(positionTotal)
     print("________")
 
-def calculateScoreForPicks(picks):
-    for pick in picks:
-        getPlayer()
 
-
-
+runNN(6)
 for i in range(7):
-    regressionResults = createRegressionData(i)
-    print(i)
+    pass
+    #regressionResults = createRegressionData(i)
+    #print(i)
     #runNN(i)
 
 # ______________end of neural network code__________________________
