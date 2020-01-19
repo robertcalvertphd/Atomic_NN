@@ -224,6 +224,7 @@ def create_score_for_each_player(predictions, all_names):
 def createModel():
     model = Sequential([
         Dense(6, input_shape=(8,), activation='relu'),
+        Dense(12, activation="relu"),
         Dense(4, activation="relu"),
         Dense(2, activation="softmax")
     ])
@@ -418,15 +419,20 @@ def runNN():
 def handleResultsByPosition(picks, trueValues):
     print("top 5 for this position")
     trueValues.sort(key=sortSecond, reverse=True)
+    positionTotal = 0
     for player in picks:
         count = 0
         for place in trueValues:
             count += 1
             if player[0] == place[0]:
-                print(player[0], "rank: ", count)
+                print(player[0], "rank: ", count, place[1])
+                positionTotal += place[1]
+    print(positionTotal)
     print("________")
 
-
+def calculateScoreForPicks(picks):
+    for pick in picks:
+        getPlayer()
 n = runNN()
 
 # ______________end of neural network code__________________________
