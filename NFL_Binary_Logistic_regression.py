@@ -2,6 +2,7 @@ import nflgame
 from CSV_HELPER import CSV_Object, createCSV
 import math
 
+writingCSVs = True
 
 class Player:
     def __init__(self, name, _id, position):
@@ -139,21 +140,27 @@ def populatePlayersForYear(year):
                     newPlayer.weekStats.append(weekStats)
                     playersData.append(newPlayer)
                     playerIndex += 1
-
+    a = len(playersData)
     return sort_players_into_position(playersData, year)
 
 
-def createPlayerDataSets():
+def createPlayerDataSets(testYear):
     allQbs = []
     allWrs = []
     allRbs = []
     ret = []
 
     for year in range(7):
+        qbs = []
+        rbs = []
+        wrs = []
+
         playerData = populatePlayersForYear(year)
         qbs = playerData[1]
         rbs = playerData[2]
         wrs = playerData[3]
+
+        a = len(qbs) + len(rbs) + len(wrs)
 
         for q in qbs:
             allQbs.append(q)
@@ -162,11 +169,14 @@ def createPlayerDataSets():
         for w in wrs:
             allWrs.append(w)
 
-        if year == 6:
-            createCSVs(qbs, wrs, rbs, year)
+        if year == testYear:
+            if writingCSVs:
+                createCSVs(qbs, wrs, rbs, year)
             ret = evaluateModelWithTestData(qbs, wrs, rbs)
-    createCSVs(allQbs, allWrs, allRbs, "_1_6")
+    if writingCSVs:
+        createCSVs(allQbs, allWrs, allRbs, "all_but_" + str(testYear))
     return ret
+
 
 def createPositionCSV(positionData, fileName, year):
     weekData = []
@@ -178,10 +188,10 @@ def createPositionCSV(positionData, fileName, year):
     createCSV(fileName, weekData, year)
 
 
-def createCSVs(qbs, wrs, rbs, year):
-    createPositionCSV(qbs, "qbs", year)
-    createPositionCSV(wrs, "wrs", year)
-    createPositionCSV(rbs, "rbs", year)
+def createCSVs(qbs, wrs, rbs, testYear):
+    createPositionCSV(qbs, "qbs", testYear)
+    createPositionCSV(wrs, "wrs", testYear)
+    createPositionCSV(rbs, "rbs", testYear)
 
 
 def binaryLogistic(week, arrayOfCoefficients):
@@ -228,7 +238,7 @@ def evaluateModelWithTestData(qbs, wrs, rbs):
     #                 intercept, fumbles, ints, passYd, rushYd, recYd, passTD, rushTD, recTD
     qbCoefficients = [-1.84, -.248, -.166, .0033947, .0062, 0, .0948, .111, 0]
     rbCoefficients = [-1.85, 0, 0, 0, .0137936, .0102325, 0, 0, 0]
-    wrCoefficients = [-2.2613, 0, 0, 0, .02128, .0112349, 0, -.998, .1228]
+    wrCoefficients = [-2.2613, 0, 0, 0, .02128, .0112349, 0, 0, 0]
 
     qbValues = evaluatePosition(qbs, qbCoefficients, qbCutoff)
     wrValues = evaluatePosition(wrs, wrCoefficients, wrCutoff)
@@ -239,4 +249,5 @@ def evaluateModelWithTestData(qbs, wrs, rbs):
     rbValues.sort(key=sortSecond, reverse=True)
 
     return qbValues[:5], rbValues[:5], wrValues[:5]
+
 
