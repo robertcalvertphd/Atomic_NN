@@ -5,7 +5,6 @@ from keras.optimizers import Adam
 from CSV_HELPER import CSV_Object, createCSV
 from NFL_Binary_Logistic_regression import createPlayerDataSets as createRegressionData
 
-
 # import numpy as np
 
 
@@ -106,16 +105,18 @@ def populatePlayersForYear(year):
     playersData = []
     playerNames = []
 
-    for i in range(16):
-        games = nflgame.games(2009 + year, week=i + 1)
+    for w in range(16):
+        games = nflgame.games(2009 + year, week=w + 1)
         players = nflgame.combine_game_stats(games)
 
         playerIndex = 0
         for p in players:
-            if p.passing_att > 15 or p.rushing_att > 5 or p.receiving_yds > 10:
-                weekStats = WeekStats(p, p.guess_position, i + 1, 2009 + year, p.fumbles_lost, p.passing_int,
-                                      p.passing_yds,
-                                      p.rushing_yds, p.receiving_yds, p.passing_tds, p.rushing_tds, p.receiving_tds)
+            if p.passing_att > 10 or p.rushing_att > 5 or p.receiving_yds > 10:
+                weekStats = WeekStats(p, p.guess_position, w + 1, 2009 + year,
+                                      p.fumbles_lost, p.passing_int, p.passing_yds,
+                                      p.rushing_yds, p.receiving_yds, p.passing_tds,
+                                      p.rushing_tds, p.receiving_tds)
+
                 if p.name in playerNames:
                     location = playerNames.index(p.name)
                     playersData[location].weekStats.append(weekStats)
@@ -150,36 +151,23 @@ def createDataSet(playerData, cutoff):
     data = []
     labels = []
     names = []
-    # print("create data set call")
+
     for player in playerData:
         for week in range(15):
-            a = player.weekStats[week]
-            if not a == 0:
-
-                l1 = player.weekStats[week + 1]
-                player.weekStats[week].set_good_next_week(l1, cutoff)
-                goodNextWeek = a.set_good_next_week(l1, cutoff)
+            thisWeek = player.weekStats[week]
+            nextWeek = player.weekStats[week + 1]
+            if not thisWeek == 0 and not nextWeek == 0:
+                # both this week and next week are valid
+                goodNextWeek = nextWeek.getGreaterThanCutoff(cutoff)
                 d: WeekStats = player.weekStats[week].getWeekAsArray()
                 d[7] = goodNextWeek
-                '''
-                l2 = player.weekStats[week + 2]
-                if not l1 == 0 and not l2 == 0:
-                    w1 = l1.getGreaterThanCutoff(cutoff)
-                    w2 = l2.getGreaterThanCutoff(cutoff)
-                
-                    data.append(d)
-                    labels.append(max(w1, w2))
-                '''
-                if not l1 == 0:
-                    w1 = l1.getGreaterThanCutoff(cutoff)
-                    data.append(d)
-                    labels.append(w1)
-                    names.append(player.name)
-
+                data.append(d)
+                labels.append(goodNextWeek)
+                names.append(player.name)
     return data, labels, names
 
 
-def calibrate(training, test, model):
+def calibrate(training, test, model, testYear):
     tries = 0
     while 1:
         tries += 1
@@ -191,11 +179,17 @@ def calibrate(training, test, model):
         samples2 = [d2[0]]
         labels2 = d2[1]
 
-        model.fit(samples, labels, batch_size=50, epochs=30, shuffle=True, verbose=0)
+        model.fit(samples, labels, batch_size=50, epochs=10, shuffle=True, verbose=0)
 
         predictions = model.predict_classes(samples2)
         p = sum(predictions / len(predictions))
-        return predictions, d2[2]
+        if .6 > p > .02:
+            return predictions, d2[2]
+
+        if tries > 20:
+            print("failed calibration")
+            #runNN(testYear)
+            return False
 
         evaluateModel(model, samples2, labels2)
 
@@ -221,7 +215,7 @@ def createModel():
     model = Sequential([
         Dense(6, input_shape=(8,), activation='relu'),
         Dense(12, activation="relu"),
-        Dense(8, activation="relu"),
+        Dense(4, activation="relu"),
         Dense(2, activation="softmax")
     ])
 
@@ -243,10 +237,10 @@ def getRankedList(players_of_a_certain_position):
     return name_score_list
 
 
-def apply_model_to_year_for_position(model, position_data, players, finalYear):
+def apply_model_to_year_for_position(model, position_data, players, testYearInt):
     trainingYear = []
-    testYear = position_data[finalYear]
-    position_data.remove(position_data[finalYear]])
+    testYearData = position_data[testYearInt]
+    position_data.remove(position_data[testYearInt])
 
     for player_list in position_data:
         for playerStats in player_list:
@@ -254,7 +248,7 @@ def apply_model_to_year_for_position(model, position_data, players, finalYear):
 
     ret = []
     for i in range(10):
-        results = calibrate(trainingYear, testYear, model)
+        results = calibrate(trainingYear, testYearData, model, testYearInt)
         if not results:
             print("invalid")
         else:
@@ -282,6 +276,7 @@ def getTotalFromPairedNamesAndScores(names, scores):
         for entry in newList:
             name = entry[0]
             if not handledNames.__contains__(name):
+                entry = []
                 entry = []
                 score = 0
                 entry.append(name)
@@ -321,27 +316,7 @@ def getPlayer(name, allPlayers):
             return player
 
 
-def createCSVs(qbs, wrs, rbs):
-    weekData = []
-    for qb in qbs:
-        for week in qb.weekStats:
-            if not week == 0:
-                weekData.append(week)
-    createCSV("qbs", weekData, 0)
-
-
-def runLogisticRegression(qbs, wrs, rbs):
-    createCSVs(qbs, wrs, rbs)
-    # get data: passed as a parameter
-
-    # create model
-
-    # apply model to test data
-
-    # print results
-
-
-def runNN(finalYear):
+def runNN(testYear):
     # yearDataSets = []
     qbModel = createModel()
     rbModel = createModel()
@@ -355,27 +330,25 @@ def runNN(finalYear):
     rbsFinalYear = []
     wrsFinalYear = []
 
-    FINAL_YEAR = finalYear
-
-    for year in range(FINAL_YEAR + 1):
+    for year in range(7):
         playerData = populatePlayersForYear(year)
 
         qbs = playerData[1]
         rbs = playerData[2]
         wrs = playerData[3]
 
-        qbsYearsDataSet.append(createDataSet(qbs, 16))
+        qbsYearsDataSet.append(createDataSet(qbs, 18))
         rbsYearsDataSet.append(createDataSet(rbs, 10))
-        wrsYearsDataSet.append(createDataSet(wrs, 8))
+        wrsYearsDataSet.append(createDataSet(wrs, 10))
 
-        if year == FINAL_YEAR:
+        if year == testYear:
             qbsFinalYear = qbs
             rbsFinalYear = rbs
             wrsFinalYear = wrs
 
-    qbResults = apply_model_to_year_for_position(qbModel, qbsYearsDataSet, qbsFinalYear, finalYear)
-    rbResults = apply_model_to_year_for_position(rbModel, rbsYearsDataSet, rbsFinalYear, finalYear)
-    wrResults = apply_model_to_year_for_position(wrModel, wrsYearsDataSet, wrsFinalYear, finalYear)
+    qbResults = apply_model_to_year_for_position(qbModel, qbsYearsDataSet, qbsFinalYear, testYear)
+    rbResults = apply_model_to_year_for_position(rbModel, rbsYearsDataSet, rbsFinalYear, testYear)
+    wrResults = apply_model_to_year_for_position(wrModel, wrsYearsDataSet, wrsFinalYear, testYear)
 
     qbRanks = qbResults[1]
     rbRanks = rbResults[1]
@@ -387,7 +360,7 @@ def runNN(finalYear):
 
     if not qbResults or not rbResults or not wrResults:
         print("rerunning")
-        runNN()
+        runNN(testYear)
 
     qbResults = separateTuples(qbResults)
     rbResults = separateTuples(rbResults)
@@ -401,19 +374,22 @@ def runNN(finalYear):
     wrResults.sort(key=sortSecond, reverse=True)
     rbResults.sort(key=sortSecond, reverse=True)
 
-    handleResultsByPosition(qbResults[:5], qbRanks)
-    handleResultsByPosition(rbResults[:5], rbRanks)
-    handleResultsByPosition(wrResults[:5], wrRanks)
+    handleResultsByPosition(qbResults[:5], qbRanks, testYear)
+    handleResultsByPosition(rbResults[:5], rbRanks, testYear)
+    handleResultsByPosition(wrResults[:5], wrRanks, testYear)
 
-    #    runLogisticRegression(qbs, rbs, wrs)
-    regressionResults = createRegressionData(finalYear)
-    handleResultsByPosition(regressionResults[0], qbRanks)
-    handleResultsByPosition(regressionResults[1], rbRanks)
-    handleResultsByPosition(regressionResults[2], wrRanks)
+#    runLogisticRegression(qbs, rbs, wrs)
+    regressionResults = createRegressionData(testYear)
+    handleResultsByPosition(regressionResults[0], qbRanks, testYear, False)
+    handleResultsByPosition(regressionResults[1], rbRanks, testYear, False)
+    handleResultsByPosition(regressionResults[2], wrRanks, testYear, False)
 
 
-def handleResultsByPosition(picks, trueValues):
-    print("top 5 for this position")
+def handleResultsByPosition(picks, trueValues, testYear, NN = True):
+    if NN:
+        print("top 5 NN picks for this position:" + str(testYear))
+    else:
+        print("top 5 BLR picks for this position:" + str(testYear))
     trueValues.sort(key=sortSecond, reverse=True)
     positionTotal = 0
     for player in picks:
@@ -427,11 +403,11 @@ def handleResultsByPosition(picks, trueValues):
     print("________")
 
 
-def calculateScoreForPicks(picks):
-    for pick in picks:
-        getPlayer()
-
+runNN(6)
 for i in range(7):
-    n = runNN(i)
+    pass
+    #regressionResults = createRegressionData(i)
+    #print(i)
+    #runNN(i)
 
 # ______________end of neural network code__________________________
