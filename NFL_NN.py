@@ -2,7 +2,7 @@ import nflgame
 from keras.models import Sequential
 from keras.layers import Dense
 from keras.optimizers import Adam
-from CSV_HELPER import CSV_Object, createCSV
+from CSV_HELPER import CSV_Object
 from NFL_Binary_Logistic_regression import createPlayerDataSets as createRegressionData
 
 # import numpy as np
@@ -48,6 +48,39 @@ class Player:
             if not w == 0:
                 score += w.getPlayerScore()
         return score
+
+    def updatePosition(self):
+        self.position = "unassigned"
+        qbv = 0
+        rbv = 0
+        wrv = 0
+        for week in self.weekStats:
+            if week.passYds > 150:
+                qbv += 30
+            else:
+                if week.recYds > 70 and week.rushYds < 20:
+                    wrv += 10
+                    wrv += week.recTD * 3
+
+                if week.rushYds > 80:
+                    rbv += 10
+                    rbv += week.rushTD * 3
+
+                if week.rushYds > 10 and week.passYds > 10:
+                    if week.recYds < week.rushYds:
+                        rbv += 1
+                    else:
+                        wrv += 1
+
+        if qbv + wrv + rbv > 10:
+            if qbv > wrv and qbv > rbv:
+                self.position = "QB"
+
+            if wrv > qbv and wrv > rbv:
+                self.position = "WR"
+
+            if rbv > qbv and rbv > wrv:
+                self.position = "RB"
 
 
 class WeekStats(CSV_Object):
@@ -126,6 +159,8 @@ def populatePlayersForYear(year):
                     newPlayer.weekStats.append(weekStats)
                     playersData.append(newPlayer)
                     playerIndex += 1
+    for p in playersData:
+        p.updatePosition()
 
     return sort_players_into_position(playersData, year)
 
@@ -167,32 +202,44 @@ def createDataSet(playerData, cutoff):
     return data, labels, names
 
 
-def calibrate(training, test, model, testYear):
+def calibrate(training, test, model):
     tries = 0
     while 1:
         tries += 1
-        d1 = training
-        samples = [d1[0]]
-        labels = d1[1]
 
-        d2 = test
-        samples2 = [d2[0]]
-        labels2 = d2[1]
+        samples = [training[0]]
+        labels = [training[1]]
+
+        testSamples = [test[0]]
+        testLabels = [test[1]]
 
         model.fit(samples, labels, batch_size=50, epochs=10, shuffle=True, verbose=0)
+        predictions = model.predict_classes(testSamples)
 
-        predictions = model.predict_classes(samples2)
         p = sum(predictions / len(predictions))
-        if .6 > p > .02:
-            return predictions, d2[2]
+        if .6 > p > .15:
+            #evaluateModel(model, samples2, labels2)
+            correct = 0
+            attempted = 0
+            for i in range(len(predictions)):
+                attempted += 1
+                prediction = predictions[i]
+                test_v = test[1][i]
+                if prediction == test_v:
+                    correct += 1
+            accuracy = correct / attempted
+            return predictions, test[2]
 
         if tries > 20:
             print("failed calibration")
             #runNN(testYear)
             return False
 
-        evaluateModel(model, samples2, labels2)
-
+def evaluateModel2(model, data):
+    d2 = data
+    samples2 = [d2[0]]
+    labels2 = d2[1]
+    evaluateModel(model, samples2, labels2)
 
 def create_score_for_each_player(predictions, all_names):
     names = []
@@ -215,11 +262,10 @@ def createModel():
     model = Sequential([
         Dense(6, input_shape=(8,), activation='relu'),
         Dense(12, activation="relu"),
-        Dense(4, activation="relu"),
         Dense(2, activation="softmax")
     ])
 
-    model.compile(Adam(lr=.001), loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+    model.compile(Adam(lr=.01), loss='sparse_categorical_crossentropy', metrics=['accuracy'])
 
     return model
 
@@ -238,17 +284,25 @@ def getRankedList(players_of_a_certain_position):
 
 
 def apply_model_to_year_for_position(model, position_data, players, testYearInt):
-    trainingYear = []
+    trainingYearStats = []
+    trainingYearLabels = []
+    trainingYearNames = []
     testYearData = position_data[testYearInt]
     position_data.remove(position_data[testYearInt])
 
-    for player_list in position_data:
-        for playerStats in player_list:
-            trainingYear.append(playerStats)
+    for year in position_data:
+        for d in year[0]:
+            trainingYearStats.append(d)
+        for e in year[1]:
+            trainingYearLabels.append(e)
+        for f in year[2]:
+            trainingYearNames.append(f)
+    assert len(trainingYearNames) == len(trainingYearLabels) == len(trainingYearNames)
 
+    trainingYearData = [trainingYearStats, trainingYearLabels, trainingYearNames]
     ret = []
-    for i in range(10):
-        results = calibrate(trainingYear, testYearData, model, testYearInt)
+    for i in range(1):
+        results = calibrate(trainingYearData, testYearData, model)
         if not results:
             print("invalid")
         else:
@@ -258,8 +312,8 @@ def apply_model_to_year_for_position(model, position_data, players, testYearInt)
             yearResults = getTotalFromPairedNamesAndScores(names, scores)
             for r in yearResults:
                 ret.append(r)
-
-    return ret, getRankedList(players)
+    evaluateModel2(model, testYearData)
+    return ret, getRankedList(players), model
 
 
 def getTotalFromPairedNamesAndScores(names, scores):
@@ -307,8 +361,8 @@ def separateTuples(tuples):
 
 def evaluateModel(model, samples, labels):
     score = model.evaluate(samples, labels, verbose=2)
-    print("loss:", str(score[0]), "accuracy", str(score[1]))
-
+    s = "MODEL EVALUATION " + " loss: " + rf(score[0]) + " accuracy " + rf(score[1])
+    testWrite(s)
 
 def getPlayer(name, allPlayers):
     for player in allPlayers:
@@ -338,25 +392,34 @@ def runNN(testYear):
         wrs = playerData[3]
 
         qbsYearsDataSet.append(createDataSet(qbs, 18))
-        rbsYearsDataSet.append(createDataSet(rbs, 10))
-        wrsYearsDataSet.append(createDataSet(wrs, 10))
+        rbsYearsDataSet.append(createDataSet(rbs, 14))
+        wrsYearsDataSet.append(createDataSet(wrs, 14))
 
         if year == testYear:
             qbsFinalYear = qbs
             rbsFinalYear = rbs
             wrsFinalYear = wrs
 
-    qbResults = apply_model_to_year_for_position(qbModel, qbsYearsDataSet, qbsFinalYear, testYear)
-    rbResults = apply_model_to_year_for_position(rbModel, rbsYearsDataSet, rbsFinalYear, testYear)
-    wrResults = apply_model_to_year_for_position(wrModel, wrsYearsDataSet, wrsFinalYear, testYear)
+    qbModelResults = apply_model_to_year_for_position(qbModel, qbsYearsDataSet, qbsFinalYear, testYear)
+    rbModelResults = apply_model_to_year_for_position(rbModel, rbsYearsDataSet, rbsFinalYear, testYear)
+    wrModelResults = apply_model_to_year_for_position(wrModel, wrsYearsDataSet, wrsFinalYear, testYear)
 
-    qbRanks = qbResults[1]
-    rbRanks = rbResults[1]
-    wrRanks = wrResults[1]
 
-    qbResults = qbResults[0]
-    rbResults = rbResults[0]
-    wrResults = wrResults[0]
+    adjusted_year = testYear - 1
+    if testYear == 0:
+        adjusted_year == 0
+
+    evaluateModel2(qbModel, qbsYearsDataSet[adjusted_year])
+    evaluateModel2(rbModel, rbsYearsDataSet[adjusted_year])
+    evaluateModel2(wrModel, wrsYearsDataSet[adjusted_year])
+
+    qbRanks = qbModelResults[1]
+    rbRanks = rbModelResults[1]
+    wrRanks = wrModelResults[1]
+
+    qbResults = qbModelResults[0]
+    rbResults = rbModelResults[0]
+    wrResults = wrModelResults[0]
 
     if not qbResults or not rbResults or not wrResults:
         print("rerunning")
@@ -374,18 +437,24 @@ def runNN(testYear):
     wrResults.sort(key=sortSecond, reverse=True)
     rbResults.sort(key=sortSecond, reverse=True)
 
-    handleResultsByPosition(qbResults[:5], qbRanks, testYear)
-    handleResultsByPosition(rbResults[:5], rbRanks, testYear)
-    handleResultsByPosition(wrResults[:5], wrRanks, testYear)
+    nn_qb_total = handleResultsByPosition(qbResults[:5], qbRanks, testYear)
+    nn_rb_total = handleResultsByPosition(rbResults[:5], rbRanks, testYear)
+    nn_wr_total = handleResultsByPosition(wrResults[:5], wrRanks, testYear)
 
 #    runLogisticRegression(qbs, rbs, wrs)
     regressionResults = createRegressionData(testYear)
-    handleResultsByPosition(regressionResults[0], qbRanks, testYear, False)
-    handleResultsByPosition(regressionResults[1], rbRanks, testYear, False)
-    handleResultsByPosition(regressionResults[2], wrRanks, testYear, False)
+    blr_qb_total = handleResultsByPosition(regressionResults[0], qbRanks, testYear, False)
+    blr_rb_total = handleResultsByPosition(regressionResults[1], rbRanks, testYear, False)
+    blr_wr_total = handleResultsByPosition(regressionResults[2], wrRanks, testYear, False)
+
+    nn_totals = [nn_qb_total,nn_rb_total,nn_wr_total]
+    blr_totals = [blr_qb_total, blr_rb_total, blr_wr_total]
+
+    compareModels(nn_totals,blr_totals)
 
 
 def handleResultsByPosition(picks, trueValues, testYear, NN = True):
+
     if NN:
         print("top 5 NN picks for this position:" + str(testYear))
     else:
@@ -397,13 +466,47 @@ def handleResultsByPosition(picks, trueValues, testYear, NN = True):
         for place in trueValues:
             count += 1
             if player[0] == place[0]:
-                print(player[0], "rank: ", count, place[1])
+                print(player[0], "rank: ", count, rf(place[1]))
                 positionTotal += place[1]
-    print(positionTotal)
+    print(rf(positionTotal))
     print("________")
 
+    return positionTotal
 
-runNN(6)
+def compareModels(NN_totals, BLR_totals):
+    # expected format of [qbScore, rbScore, wrScore]
+    nn_total = sum(NN_totals)
+    br_total = sum(BLR_totals)
+    nn_qb = rf(NN_totals[0])
+    nn_rb = rf(NN_totals[1])
+    nn_wr = rf(NN_totals[2])
+    br_qb = rf(BLR_totals[0])
+    br_rb = rf(BLR_totals[1])
+    br_wr = rf(BLR_totals[2])
+    print("NN Score:", "qb:", nn_qb, "rb:", nn_rb, "wr:",nn_wr)
+    print("BLR Score:", "qb:", br_qb, "rb:", br_rb, "wr:",br_wr)
+    print("NN:", rf(nn_total,6), "vs", "BLR:", rf(br_total,6))
+    if nn_total > br_total:
+        print("Team Neural Network wins.")
+    else:
+        print("Team Binary Logistic Regression wins")
+
+    return NN_totals, BLR_totals
+
+
+def testWrite(string, fileName = "log.txt"):
+    file1 = open(fileName, "a")
+    file1.write(string +"\n")
+    file1.close()
+
+
+def rf(float, n = 5):
+    ret = str(float)
+    ret = ret[0:n+1]
+    return ret
+
+runNN(3)
+
 for i in range(7):
     pass
     #regressionResults = createRegressionData(i)

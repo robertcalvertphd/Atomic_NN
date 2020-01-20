@@ -48,3 +48,7 @@ def createCSV(_name, csv_objects,i=0):
             sys.exit(0)
 
 
+def testWrite(string, fileName = "log.txt"):
+    file1 = open(fileName, "a")
+    file1.write(string +"\n")
+    file1.close()
