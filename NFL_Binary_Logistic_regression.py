@@ -1,8 +1,8 @@
 import nflgame
 from CSV_HELPER import CSV_Object, createCSV
 import math
+writingCSVs = False
 
-writingCSVs = True
 
 class Player:
     def __init__(self, name, _id, position):
@@ -49,6 +49,39 @@ class Player:
                         week.goodNextWeek = nextWeekisGood
                         week.updateCSVvalues()
 
+    def updatePosition(self):
+        self.position = "unassigned"
+        qbv = 0
+        rbv = 0
+        wrv = 0
+        for week in self.weekStats:
+            if week.passYds > 150:
+                qbv += 30
+            else:
+                if week.recYds > 70 and week.rushYds < 20:
+                    wrv += 10
+                    wrv += week.recTD * 3
+
+                if week.rushYds > 80:
+                    rbv += 10
+                    rbv += week.rushTD * 3
+
+                if week.rushYds > 10 and week.passYds > 10:
+                    if week.recYds < week.rushYds:
+                        rbv += 1
+                    else:
+                        wrv += 1
+
+        if qbv + wrv + rbv > 10:
+            if qbv > wrv and qbv > rbv:
+                self.position = "QB"
+
+            if wrv > qbv and wrv > rbv:
+                self.position = "WR"
+
+            if rbv > qbv and rbv > wrv:
+                self.position = "RB"
+
 
 class WeekStats(CSV_Object):
     PLAYER_NAME = 0
@@ -84,8 +117,7 @@ class WeekStats(CSV_Object):
                        self.passTD, self.rushTD, self.recTD, self.goodNextWeek]
 
     def getPlayerScore(self):
-        ret = (self.fumbles + self.interceptions) * -2 + self.passYds / 25 + self.passTD * 4 + self.rushYds / 10 + \
-              self.recYds / 10 + self.recTD * 6 + self.rushTD * 6
+        ret = (self.fumbles + self.interceptions) * -2 + self.passYds / 25 + self.passTD * 4 + self.rushYds / 10 + self.recYds / 10 + self.recTD * 6 + self.rushTD * 6
 
         return round(ret, 2)
 
@@ -97,6 +129,12 @@ class WeekStats(CSV_Object):
     def getWeekAsArray(self):
         return [self.fumbles, self.interceptions, self.passYds, self.rushYds, self.recYds, self.passTD, self.rushTD,
                 self.recTD, self.goodNextWeek]
+
+
+def rf(float, n = 5):
+    ret = str(float)
+    ret = ret[0:n+1]
+    return ret
 
 
 def sort_players_into_position(playersData, year):
@@ -128,9 +166,7 @@ def populatePlayersForYear(year):
         playerIndex = 0
         for p in players:
             if p.passing_att > 15 or p.rushing_att > 5 or p.receiving_yds > 10:
-                weekStats = WeekStats(p, p.guess_position, i + 1, 2009 + year, p.fumbles_lost, p.passing_ints,
-                                      p.passing_yds,
-                                      p.rushing_yds, p.receiving_yds, p.passing_tds, p.rushing_tds, p.receiving_tds)
+                weekStats = WeekStats(p, p.guess_position, i + 1, 2009 + year, p.fumbles_lost, p.passing_ints, p.passing_yds, p.rushing_yds, p.receiving_yds, p.passing_tds, p.rushing_tds, p.receiving_tds)
                 if p.name in playerNames:
                     location = playerNames.index(p.name)
                     playersData[location].weekStats.append(weekStats)
@@ -140,7 +176,8 @@ def populatePlayersForYear(year):
                     newPlayer.weekStats.append(weekStats)
                     playersData.append(newPlayer)
                     playerIndex += 1
-    a = len(playersData)
+    for p in playersData:
+        p.updatePosition()
     return sort_players_into_position(playersData, year)
 
 
@@ -214,40 +251,47 @@ def logit2prob(logit):
     return prob
 
 
-def evaluatePosition(players, coefficients, cutoff):
+def evaluatePosition(players, coefficients, probability_cutoff, position_cutoff):
     ret = []
+    attempted = 0
+    correct = 0
     for p in players:
         score = 0
         name = p.name
         for week in p.weekStats:
             if not week == 0:
-                if logit2prob(binaryLogistic(week, coefficients)) > cutoff:
+                attempted += 1
+                predicted = logit2prob(binaryLogistic(week, coefficients)) > probability_cutoff
+                if predicted:
                     score += 1
+                result = week.getPlayerScore() > position_cutoff
+                if result == predicted:
+                    correct += 1
         ret.append((name, score))
 
+    p = round(correct/attempted,2)
+    print(rf(correct), "of", rf(attempted), rf(p*100), "%")
     ret.sort(key=sortSecond, reverse=True)
     return ret
 
 
 def evaluateModelWithTestData(qbs, wrs, rbs):
-
-    qbCutoff = .3
-    rbCutoff = .3
-    wrCutoff = .3
+    qbCutoff = 18
+    rbCutoff = 12
+    wrCutoff = 12
 
     #                 intercept, fumbles, ints, passYd, rushYd, recYd, passTD, rushTD, recTD
     qbCoefficients = [-1.84, -.248, -.166, .0033947, .0062, 0, .0948, .111, 0]
-    rbCoefficients = [-1.85, 0, 0, 0, .0137936, .0102325, 0, 0, 0]
+    rbCoefficients = [-1.0116, 0, 0, 0, .0076457, .0099777, 0, 0, 0]
     wrCoefficients = [-2.2613, 0, 0, 0, .02128, .0112349, 0, 0, 0]
 
-    qbValues = evaluatePosition(qbs, qbCoefficients, qbCutoff)
-    wrValues = evaluatePosition(wrs, wrCoefficients, wrCutoff)
-    rbValues = evaluatePosition(rbs, rbCoefficients, rbCutoff
+    qbValues = evaluatePosition(qbs, qbCoefficients, .3, qbCutoff)
+    wrValues = evaluatePosition(wrs, wrCoefficients, .3, wrCutoff)
+    rbValues = evaluatePosition(rbs, rbCoefficients, .3, rbCutoff
                                 )
     qbValues.sort(key=sortSecond, reverse=True)
     wrValues.sort(key=sortSecond, reverse=True)
     rbValues.sort(key=sortSecond, reverse=True)
 
     return qbValues[:5], rbValues[:5], wrValues[:5]
-
 
