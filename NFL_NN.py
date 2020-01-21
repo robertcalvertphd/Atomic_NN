@@ -210,6 +210,9 @@ def calibrate(training, test, model):
         samples = [training[0]]
         labels = [training[1]]
 
+        for i in test[0]:
+            i[7]=0
+
         testSamples = [test[0]]
         testLabels = [test[1]]
 
@@ -217,6 +220,7 @@ def calibrate(training, test, model):
         predictions = model.predict_classes(testSamples)
 
         p = sum(predictions / len(predictions))
+        print(p)
         if .6 > p > .15:
             #evaluateModel(model, samples2, labels2)
             correct = 0
@@ -260,8 +264,9 @@ def create_score_for_each_player(predictions, all_names):
 
 def createModel():
     model = Sequential([
-        Dense(6, input_shape=(8,), activation='relu'),
-        Dense(12, activation="relu"),
+        Dense(8, input_shape=(8,), activation='relu'),
+        Dense(4, activation="relu"),
+        Dense(16, activation="relu"),
         Dense(2, activation="softmax")
     ])
 
@@ -391,9 +396,9 @@ def runNN(testYear):
         rbs = playerData[2]
         wrs = playerData[3]
 
-        qbsYearsDataSet.append(createDataSet(qbs, 18))
-        rbsYearsDataSet.append(createDataSet(rbs, 14))
-        wrsYearsDataSet.append(createDataSet(wrs, 14))
+        qbsYearsDataSet.append(createDataSet(qbs, 12))
+        rbsYearsDataSet.append(createDataSet(rbs, 9))
+        wrsYearsDataSet.append(createDataSet(wrs, 9))
 
         if year == testYear:
             qbsFinalYear = qbs
